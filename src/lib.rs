@@ -392,8 +392,8 @@ fn mfx<'py>(
 }
 
 #[pymodule]
-fn febolt(_py: Python, m: &PyModule) -> PyResult<()> {
-    // Register our AME function so it can be called from Python.
+fn rustmfx(_py: Python, m: &PyModule) -> PyResult<()> {
+    // Register our mfx function so it can be called from Python.
     m.add_function(wrap_pyfunction!(mfx, m)?)?;
     Ok(())
 }
