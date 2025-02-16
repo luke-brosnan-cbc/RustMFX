@@ -299,7 +299,7 @@ This produces a ```pandas.DataFrame``` object with:\
 ```python
 # get marginal effects for Probit model using rustmfx.mfx()
 # By default, <option: se_method='rust'>
-rustmfx.mfx(probit_result)
+rustmfx.mfx(results_probit)
 ```
 Output:
 ```
@@ -328,7 +328,7 @@ Here I set ```se_method='sm'``` to mimic ```statsmodel```'s method for getting s
 ```python
 # get marginal effects for Logit model using rustmfx.mfx()
 # Use <option: se_method='sm'> instead. This will produce SE identical to sm.get_margeff()
-rustmfx.mfx(logit_result, se_method='sm')
+rustmfx.mfx(results_logit, se_method='sm')
 ```
 Output:
 ```
@@ -365,7 +365,7 @@ RustMFX will automatically extract and use the robust covariance matrix in the m
 This integration ensures that your marginal effects and their standard errors reflect any adjustments made during model fitting, providing you with accurate and reliable inference.
 
 
-## Performance Comparison between rustmfx.mfx() and statsmodels.get_margeff()
+## Performance Comparison between ```.mfx()``` and ```.get_margeff()```
 Below is a graph showing the difference in peak memory usage of ```.mfx()``` and ```.get_margeff()``` across datasets of differing number of observations $N$ and degrees of freedom (number of parameters) $k$.\
 RustMFX performs exponentially better than ```statsmodels``` as the number of parameters increases.
 
