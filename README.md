@@ -1,6 +1,6 @@
 # RustMFX
 
-[![Build Status](https://github.com/luke-brosnan-cbc/RustMFX/workflows/build/badge.svg)](https://github.com/luke-brosnan-cbc/RustMFX/actions)
+[![Build Status](https://github.com/luke-brosnan-cbc/RustMFX/workflows/CI.yml/badge.svg)](https://github.com/luke-brosnan-cbc/RustMFX/actions)
 [![PyPI version](https://badge.fury.io/py/rustmfx.svg)](https://pypi.org/project/rustmfx/)
 
 ## Introduction
@@ -31,16 +31,38 @@ While libraries like statsmodels provide robust statistical tools, they can be l
 
 ## 2. Speed and Memory Efficiency
 
-RustMFX outperforms traditional Python-based methods in several key areas:
+RustMFX outperforms Python-based `statsmodels` in several key areas:
 
-- **High Performance:**  
-  ```Rust``` compiles to optimized machine code, reducing computation time significantly compared to interpreted Python code.
+### **Efficient Vectorization & Low-Level Optimizations**
+The Rust code leverages libraries like `ndarray` (using a BLAS backend) to perform operations in a highly optimized, vectorized manner.  
+This means calculations are executed on entire matrices at once, rather than iterating over rows with loops.  
+This eliminates costly Python-level loops, allowing computations to be performed in a fraction of the time.
 
-- **Memory Efficiency:**  
-  ```Rust```’s zero-cost abstractions and strict compile-time checks ensure that RustMFX consumes far less memory. This is especially important when processing large datasets.
+### **Loop-Based Computation in `statsmodels`**
+- `statsmodels.get_margeff()` uses explicit **Python loops** in places where RustMFX performs **fully vectorized** operations.
+- For **continuous variables**, `statsmodels` iterates over observations to compute marginal effects, while RustMFX applies **matrix operations across the entire dataset in one step**.
+- For **discrete variables**, `statsmodels` **loops over each discrete feature**, recomputing probabilities for every observation twice (once for `X=0`, once for `X=1`).  
+  In contrast, RustMFX **batch-computes these changes** in a single matrix operation.
 
-These features make RustMFX an ideal choice when you need to analyze large-scale data quickly and efficiently.
+### **Memory Efficiency & In-Place Computation**
+Rust’s strict memory management and zero-cost abstractions help keep memory overhead low.  
+- RustMFX **reuses memory** and avoids large temporary allocations, ensuring that memory usage scales efficiently with increasing variables.  
+- `statsmodels.get_margeff()` **creates multiple intermediate arrays**, whose sizes grow significantly as the number of variables $K$ increases.  
+  This leads to exponential memory growth in `statsmodels`, whereas RustMFX remains efficient even at large scales.
 
+### **Compiled vs. Interpreted Code**
+Rust is a compiled language with aggressive optimizations by LLVM, while `statsmodels` is written in Python (using `NumPy` for vectorization).  
+Although `NumPy` is optimized for array computations, Python’s **dynamic memory management and interpreted nature** introduce **overhead**,  
+especially when handling large models with many variables.
+
+
+### **Why RustMFX Scales Better**
+✔ **Fully vectorized operations** eliminate Python loops for both continuous and discrete marginal effects.  
+✔ **Lower memory footprint** by avoiding large temporary allocations and using in-place computation.  
+✔ **Efficient discrete variable handling** batch-computes discrete effects instead of looping over them.  
+✔ **Scales efficiently with increasing $K$**, whereas `statsmodels.get_margeff()` suffers from excessive memory usage.
+
+These features make RustMFX an ideal choice for analyzing large-scale data **quickly, efficiently, and with minimal memory overhead**.
 
 
 ## 3. Comparison: Statsmodels-Style vs. Rust Method
@@ -51,7 +73,7 @@ RustMFX provides two methods for calculating standard errors of the marginal eff
 - **Description:**  
   This method calculates the gradient (Jacobian) of the marginal effects with respect to the coefficients by averaging the individual observation-level gradients.
 - **Benefits:**  
-  Captures detailed individual-level variability, which is beneficial when data heterogeneity is significant. Closer tyo the way Stata calulates Standard Errors.
+  Captures detailed individual-level variability, which is beneficial when data heterogeneity is significant. Closer to the way Stata calculates Standard Errors.
 - **Use Cases:**  
   Best used in applications where capturing the nuances of individual effects is crucial.
 
@@ -61,7 +83,7 @@ RustMFX provides two methods for calculating standard errors of the marginal eff
 - **Benefits:**  
   Produces smoother and often more stable SE estimates, especially useful in smaller samples.
 - **Use Cases:**  
-  Preferred when consistency with traditional statsmodels output is desired or when more stable SE estimates are needed.
+  Preferred when consistency with traditional ```statsmodels``` output is desired or when more stable SE estimates are needed.
 
 
 
@@ -168,7 +190,7 @@ These approaches allow you to choose the estimation method that best fits your a
 
 ### Handling of Continuous vs. Discrete Variables
 
-RustMFX distinguishes between **continuous** and **discrete** variables when computing marginal effects and their standard errors (in an identical way to ```sm.get_margeff()```:
+RustMFX distinguishes between **continuous** and **discrete** variables when computing marginal effects and their standard errors (in an identical way to ```sm.get_margeff()```):
 
 - **Continuous Variables:**  
   For a continuous variable $\text{X}\_j$, the marginal effect is computed as:
@@ -275,7 +297,7 @@ This produces a ```pandas.DataFrame``` object with:\
 
 
 ```python
-# get marginal effects for Probit modelusing rustmfx.mfx()
+# get marginal effects for Probit model using rustmfx.mfx()
 # By default, <option: se_method='rust'>
 rustmfx.mfx(probit_result)
 ```
@@ -297,7 +319,7 @@ Output:
 This time we run ```.mfx()``` on the Logit model.
 
 
-The ```.mfx()``` function automatically detects if the ```sm.{Model}(y,X).fit()``` is Probit or Logit by extratcing ```{Model}.model.__class__.__name__```
+The ```.mfx()``` function automatically detects if the ```sm.{Model}(y,X).fit()``` is Probit or Logit by extracting ```{Model}.model.__class__.__name__```
 
 
 Here I set ```se_method='sm'``` to mimic ```statsmodel```'s method for getting standard errors.
@@ -305,7 +327,7 @@ Here I set ```se_method='sm'``` to mimic ```statsmodel```'s method for getting s
 
 ```python
 # get marginal effects for Logit model using rustmfx.mfx()
-# Use <option: se_method='sm'> instead. This will repoduce SE identical to sm.get_margeff()
+# Use <option: se_method='sm'> instead. This will produce SE identical to sm.get_margeff()
 rustmfx.mfx(logit_result, se_method='sm')
 ```
 Output:
@@ -324,7 +346,7 @@ Output:
 
 ## Accounting for Robust SE, Clustered SE, and Weights
 
-One of the key advantages of RustMFX is that it automatically uses the model’s covariance matrix—obtained via the ````cov_params()```` method from the ```statsmodels``` fit object—in the delta method to compute the standard errors of the marginal effects.
+One of the key advantages of RustMFX is that it automatically uses the model’s covariance matrix—obtained via the ```cov_params()``` method from the ```statsmodels``` fit object—in the delta method to compute the standard errors of the marginal effects.
 
 **What does this mean for you?**  
 If you fit your model with additional parameters such as robust standard errors, clustered standard errors, or observation weights (for example, by using options like ```cov_type='HC0'```, ```cov_kwds={'groups': clusters}```, or specifying weights), these adjustments will be captured in the covariance matrix output of your ```sm.{Model}(y, X).fit()``` call.
@@ -344,7 +366,16 @@ This integration ensures that your marginal effects and their standard errors re
 
 
 ## Performance Comparison between rustmfx.mfx() and statsmodels.get_margeff()
-Below are some graphs showuing the digfference in peak memory usage of ```.mfx()``` and ```.get_margeff().summary_frame()``` across datasets of differing number of observations $N$ and degrees of freedom (number of parameters) $k$
+Below is a graph showing the difference in peak memory usage of ```.mfx()``` and ```.get_margeff()``` across datasets of differing number of observations $N$ and degrees of freedom (number of parameters) $k$.\
+RustMFX performs exponentially better than ```statsmodels``` as the number of parameters increases.
+
+<div align="center"; margin: 0>
+  
+### Memory Usage Comparison of ```.get_margeff()``` VS ```.mfx()```
+
+</div>
+
+![Memory Usage Comparison of .get_margeff() VS .mfx()](Memory%20Comparison%20.get_margeff()%20VS%20.mfx().png?raw=true&v=2)
 
 
 ## Contributing
