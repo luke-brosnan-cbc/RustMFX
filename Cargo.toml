@@ -1,5 +1,5 @@
 [package]
-name = "febolt"
+name = "rustmfx"
 version = "0.1.60"
 edition = "2021"
 description = "Statistics library for Python powered by Rust"
@@ -9,7 +9,7 @@ readme = "README.md"
 build = "build.rs"
 
 [lib]
-name = "febolt"
+name = "rustmfx"
 crate-type = ["cdylib"]
 
 [features]
