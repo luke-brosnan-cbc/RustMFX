@@ -1,0 +1,41 @@
+[package]
+name = "febolt"
+version = "0.1.60"
+edition = "2021"
+description = "Statistics library for Python powered by Rust"
+license = "MIT"
+repository = "https://github.com/luke-brosnan-cbc/RuSTATS"
+readme = "README.md"
+build = "build.rs"
+
+[lib]
+name = "febolt"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
+openblas = ["blas", "ndarray-linalg/openblas-static"]
+blas = ["ndarray/blas"]
+
+
+[dependencies]
+pyo3 = { version = "0.18", features = ["extension-module"] }
+numpy = "0.18"
+ndarray = { version = "0.15", default-features = false, features = ["std", "blas"] } 
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = "0.9"
+statrs = "0.16"
+blas = "0.22.0"
+thiserror = "1.0"
+
+# Linux/macOS specific dependencies
+[target.'cfg(not(windows))'.dependencies]
+openblas-src = { version = "0.10", features = ["static"] }
+ndarray-linalg = { version = "0.16", default-features = false, features = ["openblas-static"] }
+
+# Windows specific dependencies
+[target.'cfg(windows)'.dependencies]
+intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-seq"] }
+ndarray-linalg = { version = "0.16", default-features = false, features = ["intel-mkl-static"] }
+
