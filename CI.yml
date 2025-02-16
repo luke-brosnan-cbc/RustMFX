@@ -1,0 +1,402 @@
+
+name: Python
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        target: ["x86_64"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Python
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.local/lib/python${{ matrix.python-version }}/site-packages
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          # No need to install libopenblas-dev since we'll build it from source.
+          sudo apt-get install -y --no-install-recommends \
+            libssl-dev openssl pkg-config build-essential
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          if [[ "${{ matrix.python-version }}" == "3.12" ]]; then
+            pip install numpy==1.26.4
+          else
+            pip install numpy==1.24.0
+          fi
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        # No need to set OPENBLAS_DIR since openblas-src will build OpenBLAS
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features openblas --interpreter python${{ matrix.python-version }} # This now uses openblas-static from Cargo.toml
+          python: python${{ matrix.python-version }}
+          sccache: 'true'
+          manylinux: auto
+          docker-options: -e OPENSSL_NO_VENDOR=1
+          before-script-linux: |
+            yum install -y epel-release
+            yum install -y openssl-devel perl-IPC-Cmd perl-Test-Simple perl-App-cpanminus
+            # Do not install openblas-devel because we want openblas-src to build OpenBLAS
+            cpanm --notest Term::Table
+            export OPENBLAS_NO_AVX2=1
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.python-version }}
+          path: dist
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    env:
+      MKL_VERSION: "2025.0.1.47"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\.cargo\registry
+            ~\.cargo\git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Python
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\pip\Cache
+            ${{ env.pythonLocation }}\Lib\site-packages
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/Cargo.toml') }}
+
+
+      - name: Install Intel oneAPI Math Kernel Library (oneMKL)
+        shell: pwsh
+        run: |
+          Write-Output "Starting Intel oneAPI BaseKit installation..."
+      
+          # Construct the installer URL using MKL_VERSION
+          $MKL_VERSION = "${{ env.MKL_VERSION }}"
+          $URL = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ae29263e-38b9-4d43-86c3-376d6e0668e7/intel-oneapi-base-toolkit-${MKL_VERSION}_offline.exe"
+          $COMPONENTS = "intel.oneapi.win.mkl.devel:intel.oneapi.win.tbb.devel:intel.oneapi.win.dpl"
+          $INSTALLER_PATH = "$env:TEMP\webimage.exe"
+          $EXTRACTED_PATH = "$env:TEMP\webimage_extracted"
+          $EXTRACT_LOG = "$env:TEMP\extract.log"
+          $INSTALL_LOG_DIR = "$env:TEMP\mkl_install_logs"
+      
+          Write-Output "Downloading Intel oneAPI BaseKit installer from $URL..."
+          try {
+            Invoke-WebRequest -Uri $URL -OutFile $INSTALLER_PATH -UseBasicParsing -ErrorAction Stop
+            Write-Output "Download completed successfully."
+          } catch {
+            Write-Error "Failed to download the MKL installer: $_"
+            exit 1
+          }
+      
+          Write-Output "Extracting the installer..."
+          try {
+            Start-Process -FilePath $INSTALLER_PATH -ArgumentList "-s", "-x", "-f", $EXTRACTED_PATH, "--log", $EXTRACT_LOG -Wait -NoNewWindow
+            Write-Output "Extraction completed successfully."
+          } catch {
+            Write-Error "Extraction failed: $_"
+            if (Test-Path $EXTRACT_LOG) {
+              Write-Output "---- Extract Log Start ----"
+              Get-Content $EXTRACT_LOG | Write-Output
+              Write-Output "---- Extract Log End ----"
+            }
+            exit 1
+          }
+      
+          Remove-Item $INSTALLER_PATH -Force
+      
+          Write-Output "Running the MKL bootstrapper..."
+          try {
+            Start-Process -FilePath "$EXTRACTED_PATH\bootstrapper.exe" -ArgumentList "-s", "--action", "install", "--components=$COMPONENTS", "--eula=accept", "-p=NEED_VS2017_INTEGRATION=0", "-p=NEED_VS2019_INTEGRATION=0", "-p=NEED_VS2022_INTEGRATION=0", "--log-dir=$INSTALL_LOG_DIR" -Wait -NoNewWindow
+            Write-Output "MKL bootstrapper completed successfully."
+          } catch {
+            Write-Error "MKL bootstrapper failed: $_"
+            if (Test-Path "$INSTALL_LOG_DIR\*.log") {
+              Write-Output "---- MKL Installation Logs Start ----"
+              Get-ChildItem "$INSTALL_LOG_DIR\*.log" | ForEach-Object {
+                Write-Output "--- Log File: $_ ---"
+                Get-Content $_ | Write-Output
+                Write-Output "--- End of $_ ---"
+              }
+              Write-Output "---- MKL Installation Logs End ----"
+            }
+            exit 1
+          }
+      
+          Remove-Item -Recurse -Force $EXTRACTED_PATH
+      
+          Write-Output "MKL installed successfully."
+
+      - name: List oneAPI Installation Directory
+        shell: pwsh
+        run: |
+          $oneapi_path = "C:\Program Files (x86)\Intel\oneAPI\mkl\2025.0"
+          Write-Output "Listing contents of ${oneapi_path}:"
+          if (Test-Path $oneapi_path) {
+            Get-ChildItem -Path $oneapi_path -Directory | Select-Object Name, FullName
+          } else {
+            Write-Error "oneAPI installation path does not exist: $oneapi_path"
+          }
+
+      - name: Find MKL lib path
+        shell: pwsh
+        id: find_mkl_lib
+        run: |
+          $mkl_base_path = "C:\Program Files (x86)\Intel\oneAPI\mkl"
+          if (Test-Path $mkl_base_path) {
+            # Get the latest MKL version directory
+            $latest_mkl = Get-ChildItem -Path $mkl_base_path -Directory | Sort-Object Name -Descending | Select-Object -First 1
+            if ($latest_mkl) {
+              $mkl_lib_path = "$($latest_mkl.FullName)\lib"
+              Write-Output "MKL lib path found: $mkl_lib_path"
+              # Set the output using environment file
+              echo "mkl_lib_path=$mkl_lib_path" >> $env:GITHUB_OUTPUT
+            } else {
+              Write-Error "No MKL versions found in $mkl_base_path"
+            }
+          } else {
+            Write-Error "MKL installation base path does not exist: $mkl_base_path"
+          }
+
+      - name: Setup MKL environment variables
+        shell: pwsh
+        run: |
+          $mkl_lib_path = "${{ steps.find_mkl_lib.outputs.mkl_lib_path }}"
+          Write-Output "Setting MKL_LIB_PATH to $mkl_lib_path"
+          echo "MKL_LIB_PATH=$mkl_lib_path" >> $env:GITHUB_ENV
+
+      - name: List MKL lib directory
+        shell: pwsh
+        run: |
+          $mkl_lib_path = "${{ env.MKL_LIB_PATH }}"
+          Write-Output "Listing contents of ${mkl_lib_path}:"
+          if (Test-Path $mkl_lib_path) {
+            Get-ChildItem -Path $mkl_lib_path -Recurse -Filter "*.lib" | Select-Object FullName, Name
+          } else {
+            Write-Error "MKL lib path does not exist: $mkl_lib_path"
+          }
+
+      - name: Verify MKL Installation
+        shell: pwsh
+        run: |
+          $mkl_lib_path = "${{ env.MKL_LIB_PATH }}"
+          Write-Output "Checking MKL libraries in: ${mkl_lib_path}"
+          if (Test-Path $mkl_lib_path) {
+            Write-Output "MKL lib directory exists. Listing .lib files:"
+            Get-ChildItem -Path $mkl_lib_path -Recurse -Filter "*.lib" | Select-Object FullName, Name
+          } else {
+            Write-Error "MKL library path does not exist: $mkl_lib_path"
+          }
+
+      - name: Upload Extraction Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: extract-log
+          path: "$env:TEMP\extract.log"
+
+      - name: Upload MKL Installation Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkl-install-logs
+          path: "${{ runner.temp }}/mkl_install_logs/*"
+
+      - name: Setup MKL environment variables for Build
+        shell: pwsh
+        run: |
+          $mkl_lib_path = "${{ env.MKL_LIB_PATH }}"
+          $mkl_bin_path = $mkl_lib_path.Replace('\lib', '\bin\intel64')
+          
+          $env:MKL_INTERFACE_LAYER = "LP64"
+          $env:MKL_THREADING_LAYER = "SEQ"
+          $env:PATH += ";$mkl_bin_path"
+          
+          Write-Output "MKL_INTERFACE_LAYER set to LP64"
+          Write-Output "MKL_THREADING_LAYER set to SEQ"
+          Write-Output "Updated PATH to include: $mkl_bin_path"
+          
+          # Export variables for subsequent steps
+          echo "MKL_INTERFACE_LAYER=$env:MKL_INTERFACE_LAYER" >> $env:GITHUB_ENV
+          echo "MKL_THREADING_LAYER=$env:MKL_THREADING_LAYER" >> $env:GITHUB_ENV
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          if ("${{ matrix.python-version }}" -eq "3.12") {
+            pip install numpy==1.26.4
+          } else {
+            pip install numpy==1.24.0
+          }
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64
+          args: --release --out dist --features intel-mkl-static
+        env:
+          CARGO_FEATURE_INTEL_MKL_STATIC: "1"
+          MKL_INTERFACE_LAYER: "LP64"
+          MKL_THREADING_LAYER: "SEQ"
+          RUST_LOG: "intel_mkl_src=debug"
+          sccache: 'true'
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.python-version }}
+          path: dist
+  macos:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        platform:
+          - runner: macos-13
+            target: x86_64
+          - runner: macos-14
+            target: aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Homebrew
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/Homebrew
+            /usr/local/Homebrew
+          key: ${{ runner.os }}-brew-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Python
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ~/.local/lib/python${{ matrix.python-version }}/site-packages
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/Cargo.toml') }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          # Disable Homebrew auto-update
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install openssl openblas
+          echo "OPENSSL_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=$(brew --prefix openssl)/lib" >> $GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl)/include" >> $GITHUB_ENV
+
+          python -m pip install --upgrade pip setuptools wheel
+          if [[ "${{ matrix.python-version }}" == "3.12" ]]; then
+            pip install numpy==1.26.4
+          else
+            pip install numpy==1.24.0
+          fi
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --features openblas  # Explicitly enable openblas
+          sccache: 'true'
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.python-version }}-${{ matrix.platform.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [linux, windows, macos, sdist]
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          command: upload
+          args: --non-interactive --skip-existing wheels-*/*
