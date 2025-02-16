@@ -1,55 +1,355 @@
-# FeBOLT-
+# RustMFX
 
-[![Build Status](https://github.com/luke-brosnan-cbc/FeBOLT/workflows/build/badge.svg)](https://github.com/luke-brosnan-cbc/FeBOLT/actions)
-[![PyPI version](https://badge.fury.io/py/febolt.svg)](https://pypi.org/project/febolt/)
+[![Build Status](https://github.com/luke-brosnan-cbc/RustMFX/workflows/build/badge.svg)](https://github.com/luke-brosnan-cbc/RustMFX/actions)
+[![PyPI version](https://badge.fury.io/py/rustmfx.svg)](https://pypi.org/project/rustmfx/)
 
 ## Introduction
 
-As datasets continue to grow in size, economists, social scientists, and data analysts require more efficient tools for statistical modeling and inference. Traditional Python libraries like `statsmodels` provide robust inference capabilities but can be slow and memory-intensive, making them impractical for large datasets. Meanwhile, `scikit-learn` offers efficient machine learning tools but lacks the depth of statistical inference needed for rigorous empirical research.
+**RustMFX** is a high-performance Rust package for computing marginal effects (MEs) in binary choice models (Logit and Probit). 
 
-Enter `Febolt`: a high-performance statistical modeling package built with Rust to provide **fast, memory-efficient**, and **fully-featured inference** capabilities. `FeBOLT` is designed to bridge the gap between performance and analytical depth, making it an ideal choice for researchers working with large-scale data.
 
-## Features
+As datasets in economics, social sciences, and data science continue to grow in size and complexity, traditional tools (like ```statsmodels```) can struggle with speed and memory efficiency.
 
-- **Probit, Logit, and OLS Models**: Supports fundamental regression models with additional enhancements.
-- **Weighted Regression**: Apply observation weights to models.
-- **Clustered and Robust Standard Errors**: More reliable inference with robust and cluster-adjusted SEs.
-- **Average Marginal Effects (AMEs)**: Compute AMEs for Logit and Probit models.
-- **Rust-Powered Performance**: Significantly faster computations compared to Python-based alternatives.
-- **Optimized for 32-bit and 64-bit Floats**: Choose between improved memory efficiency with 32-bit floats or higher precision with 64-bit floats.
 
-## Why FeBOLT?
+RustMFX leverages ```Rust```’s efficiency and safety to deliver fast and memory-friendly computations of average marginal effects (AMEs) and their standard errors (SEs).
 
-### **Performance Meets Inference**
-Unlike `scikit-learn`, which focuses on machine learning without comprehensive inference support, `FeBOLT` is built specifically for statistical modeling while maintaining **speed and efficiency**. Unlike `statsmodels`, which can be bulky and slow for large datasets, `FeBOLT` leverages **Rust’s performance optimizations** to provide rapid computations without sacrificing analytical power.
 
-### **Memory Efficiency for Large Datasets**
-Economists and social scientists often deal with panel datasets and large-scale survey data, where traditional inference models become infeasible due to memory constraints. `FeBOLT` allows the use of **32-bit floats** to **significantly reduce memory usage**, while still offering **64-bit float precision** for cases where accuracy is paramount.
 
-### **Inference Without Compromise**
-While `scikit-learn` lacks built-in inference tools like **robust and clustered standard errors**, `FeBOLT` incorporates these essential statistical features to support rigorous empirical research. Whether you need **fast OLS regression** or **efficient Probit/Logit estimation with AMEs**, `FeBOLT` delivers both speed and accuracy in one package.
+## 1. Introduction
 
-## Installation
+In today's data-driven world, researchers and practitioners are faced with increasingly massive datasets.
 
-```bash
-pip install febolt
-```
 
-## Quick Start
+In fields such as economics, social sciences, and data science, analyzing high-dimensional data efficiently is critical.
+
+
+While libraries like statsmodels provide robust statistical tools, they can be limited by the speed and memory constraints of Python when handling large datasets.
+
+
+**RustMFX** was designed to overcome these challenges by using ```Rust```—a language known for its high performance and low memory overhead—to compute marginal effects quickly and reliably.
+
+
+## 2. Speed and Memory Efficiency
+
+RustMFX outperforms traditional Python-based methods in several key areas:
+
+- **High Performance:**  
+  ```Rust``` compiles to optimized machine code, reducing computation time significantly compared to interpreted Python code.
+
+- **Memory Efficiency:**  
+  ```Rust```’s zero-cost abstractions and strict compile-time checks ensure that RustMFX consumes far less memory. This is especially important when processing large datasets.
+
+These features make RustMFX an ideal choice when you need to analyze large-scale data quickly and efficiently.
+
+
+
+## 3. Comparison: Statsmodels-Style vs. Rust Method
+
+RustMFX provides two methods for calculating standard errors of the marginal effects:
+
+### Rust Method (```"rust"```)
+- **Description:**  
+  This method calculates the gradient (Jacobian) of the marginal effects with respect to the coefficients by averaging the individual observation-level gradients.
+- **Benefits:**  
+  Captures detailed individual-level variability, which is beneficial when data heterogeneity is significant. Closer tyo the way Stata calulates Standard Errors.
+- **Use Cases:**  
+  Best used in applications where capturing the nuances of individual effects is crucial.
+
+### Statsmodels-Style Method (```"sm"```)
+- **Description:**  
+  This approach computes the derivative of the predicted probabilities with respect to the coefficients and then averages this derivative over all observations.
+- **Benefits:**  
+  Produces smoother and often more stable SE estimates, especially useful in smaller samples.
+- **Use Cases:**  
+  Preferred when consistency with traditional statsmodels output is desired or when more stable SE estimates are needed.
+
+
+
+## 4. Methodology: Calculating Marginal Effects and Standard Errors
+
+RustMFX calculates Average Marginal Effects (AMEs) and uses the delta method to compute standard errors.
+
+### Marginal Effects Calculation
+
+For a given observation $i$ and variable $j$, the marginal effect is:
+
+<div align="center"; margin: 0>
+  
+### $\frac{\partial P(Y=1 \mid \text{X}\_i)}{\partial \text{X}\_{ij}} = \beta_j \times f(\text{X}\_i \beta)$
+
+</div>
+
+where:
+- $\beta_j$ is the coefficient for variable $j$,
+- $f(\cdot)$ is the probability density function (PDF):
+ 
+  - **Logit:**
+
+  <div align="center"; margin: 0>
+    
+  ### $f(z) = \frac{e^z}{\left(1+e^z\right)^2}$
+
+  </div>
+
+  - **Probit:**
+
+  <div align="center"; margin: 0>
+    
+  ### $f(z) = \frac{1}{\sqrt{2\pi}} e^{-0.5 z^2}$
+
+  </div>
+
+  <br>
+
+The Average Marginal Effect (AME) is computed by averaging over all $N$ observations:
+
+<div align="center"; margin: 0>
+
+### $\text{AME}\_j = \frac{1}{N} \sum_{i=1}^{N} \beta_j \times f(\text{X}\_i \beta)$
+
+</div>
+
+<br>
+
+### Standard Errors Calculation
+
+Using the delta method, the variance of the AME is calculated as:
+
+<div align="center"; margin: 0>
+  
+### $\text{Var}(\text{AME}) = \text{J} \cdot \text{Var}(\beta) \cdot \text{J}^T$
+
+</div>
+
+where $\text{J}$ is the Jacobian matrix of the transformation from coefficients to marginal effects. The Jacobian is computed differently depending on the method:
+
+- **Rust Method:**
+
+<div align="center"; margin: 0>
+  
+### $\text{J}\_{\text{rust}} = \frac{1}{N} \sum_{i=1}^{N} \frac{\partial \left( \beta_j f(\text{X}\_i \beta) \right)}{\partial \beta}$
+
+</div>
+
+#### **Explanation:**
+- This method computes the **Jacobian by taking the derivative of the marginal effects function for each individual observation**.
+- The gradient is **first computed at the observation level** and then **averaged over all $N$ observations**.
+- This approach **captures individual-level variability** in marginal effects **more accurately**.
+- The **partial derivative term** represents how a **small change in $\beta$** affects the probability distribution function $f(\text{X}_i \beta)$.
+- **Closer to how Stata computes standard errors** and more **sensitive to variations across observations**.
+
+#### **✅ Why Use This Method?**
+✔ More precise in heterogeneous datasets (e.g., large-scale social science or labor market studies).  
+✔ Preserves individual-level variability rather than smoothing it out.  
+✔ Better for large datasets where heterogeneity matters. 
+
+- **Statsmodels-Style Method:**
+
+<div align="center"; margin: 0>
+  
+### $\text{J}\_{\text{sm}} = \frac{1}{N} \sum_{i=1}^{N} \text{X}\_i \ f(\text{X}\_i \beta)$
+
+</div>
+
+#### **Explanation:**
+- Instead of differentiating at the individual level, this method **computes the derivative of the predicted probability function with respect to $\beta$, then averages over all observations**.
+- The term $\text{X}_i$ represents the **independent variable values** for observation $i$, and it is multiplied by the **PDF** $f(\text{X}_i \beta)$.
+- This method **smooths out variability across observations**, leading to **more stable standard error estimates**.
+- While **slightly less precise at the individual level**, it is **computationally simpler and produces standard errors identical to `statsmodels`**.
+
+#### **✅ Why Use This Method?**
+✔ Produces more stable standard errors, especially in small samples.  
+✔ Ensures consistency with traditional `statsmodels` outputs.  
+✔ Useful when a more aggregated (less individual-specific) marginal effect estimate is preferred.  
+
+<br>
+
+These approaches allow you to choose the estimation method that best fits your application needs.
+
+### Handling of Continuous vs. Discrete Variables
+
+RustMFX distinguishes between **continuous** and **discrete** variables when computing marginal effects and their standard errors (in an identical way to ```sm.get_margeff()```:
+
+- **Continuous Variables:**  
+  For a continuous variable $\text{X}\_j$, the marginal effect is computed as:
+
+<div align="center"; margin: 0>
+  
+### $\frac{\partial P(Y=1 \mid \text{X}\_i)}{\partial \text{X}\_{ij}} = \beta_j \times f(\text{X}\_i \beta)$
+
+</div>
+  
+This formula directly measures how a small change in $\text{X}_j$ affects the probability $\text{P}(Y=1)$. The associated Jacobian and standard errors are calculated using the derivative of this expression.
+
+- **Discrete Variables:**  
+  For a discrete (binary) variable $\text{X}\_j$, the marginal effect is computed using a **finite-difference approach**:
+
+<div align="center"; margin: 0>
+  
+### $\Delta P = P(Y=1 \mid \text{X}\_{ij}=1) - P(Y=1 \mid \text{X}\_{ij}=0)$
+
+</div>
+
+Rather than using a derivative (which isn't defined for variables that only take two values), this method measures the change in the predicted probability when the variable switches from ```0``` to ```1```.
+
+
+The gradient for discrete variables is computed by comparing the probability densities for both states, ensuring that the binary nature of the variable is appropriately handled.
+
+## 5. How to Use RustMFX
+
+Below is an example of how to integrate RustMFX into your workflow. First install ```rustmfx``` on your system.
 
 ```python
-import febolt
-
-# Example usage (to be filled in)
+pip install rustmfx
 ```
 
-## Performance
 
-`FeBOLT` outperforms `statsmodels` and `scikit-learn` by leveraging Rust’s speed and memory efficiency. This results in significantly faster execution times, especially for large datasets and models requiring robust standard errors.
+Here we will construct a dataset using ```make_classification``` from the ```sklearn``` library. Then we fit ```sm.Probit``` and ```sm.Logit``` models.
+
+__Note__:
+- It is important that ```y``` and ```X``` fed to the ```sm.{Model}(y,X).fit()``` function are ```pandas.DataFrame``` type, as this will result in the output objects being DFs, which is required by ```rustmfx.mfx()```.
+- Column names must also be strings/non-numeric.
+
+
+```python
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+from sklearn.datasets import make_classification
+
+# Import RustMFX
+import rustmfx  
+
+# Number of rows
+nobs = 1_000_000
+
+# Define feature counts
+num_continuous = 4
+num_dummy = 4
+num_features = num_continuous + num_dummy
+
+# Randomly decide how many variables should be predictive
+num_informative = np.random.randint(1, num_features + 1)  # At least 1 variable is predictive
+
+# Generate dataset with random informative variables
+X, y = make_classification(
+    n_samples=nobs,
+    n_features=num_features,
+    n_informative=num_informative,  # Randomly chosen number of informative variables
+    n_redundant=0,  
+    n_classes=2,  
+    random_state=42
+)
+
+# Convert to Pandas DataFrame with proper naming
+continuous_names = [f"continuous_{i+1}" for i in range(num_continuous)]
+dummy_names = [f"dummy_{i+1}" for i in range(num_dummy)]
+column_names = continuous_names + dummy_names
+X = pd.DataFrame(X, columns=column_names)
+y = pd.DataFrame(y, columns=["outcome"])
+
+# Convert last 4 columns (dummy variables) into 0/1 binary variables
+X[dummy_names] = (X[dummy_names] > X[dummy_names].median()).astype(int)  
+
+# Add intercept column
+X = sm.add_constant(X)
+
+# Fit Logit and Probit models using Statsmodels
+results_probit = sm.Probit(y, X).fit(disp=0)
+results_logit = sm.Logit(y, X).fit(disp=0)
+```
+
+
+Below we run ```rustmfx.mfx()``` on the Probit model. ```se_method``` defaults to ```"rust"```.
+
+
+This produces a ```pandas.DataFrame``` object with:\
+```variable names```;\
+```dy/dx``` (average marginal effects);\
+```Standard Errors```;\
+```z score```;\
+```p-values```;\
+```95% confidence interval```;\
+```Significance level``` (```*``` = p<0.1, ```**``` = p<0.05, ```***``` = p<0.01).
+
+
+
+```python
+# get marginal effects for Probit modelusing rustmfx.mfx()
+# By default, <option: se_method='rust'>
+rustmfx.mfx(probit_result)
+```
+Output:
+```
+|              |        dy/dx |    Std. Err |           z |   Pr(>|z|) |   Conf. Int. Low |   Conf. Int. Hi | Significance   |
+|:-------------|-------------:|------------:|------------:|-----------:|-----------------:|----------------:|:---------------|
+| continuous_1 | -0.000711967 | 0.000429515 |   -1.65761  |  0.0973968 |     -0.00155382  |     0.000129882 | *              |
+| continuous_2 |  0.000143285 | 0.000429703 |    0.333452 |  0.738793  |     -0.000698933 |     0.000985503 |                |
+| continuous_3 |  0.132766    | 0.000325385 |  408.028    |  0         |      0.132128    |     0.133404    | ***            |
+| continuous_4 |  0.000172238 | 0.000429776 |    0.400763 |  0.688595  |     -0.000670123 |     0.0010146   |                |
+| dummy_1      | -0.144887    | 0.000853498 | -169.757    |  0         |     -0.14656     |    -0.143214    | ***            |
+| dummy_2      |  0.355616    | 0.000853642 |  416.586    |  0         |      0.353943    |     0.357289    | ***            |
+| dummy_3      | -0.000114508 | 0.000858866 |   -0.133325 |  0.893936  |     -0.00179789  |     0.00156887  |                |
+| dummy_4      |  0.193636    | 0.000841226 |  230.183    |  0         |      0.191987    |     0.195285    | ***            |
+```
+
+
+This time we run ```.mfx()``` on the Logit model.
+
+
+The ```.mfx()``` function automatically detects if the ```sm.{Model}(y,X).fit()``` is Probit or Logit by extratcing ```{Model}.model.__class__.__name__```
+
+
+Here I set ```se_method='sm'``` to mimic ```statsmodel```'s method for getting standard errors.
+
+
+```python
+# get marginal effects for Logit model using rustmfx.mfx()
+# Use <option: se_method='sm'> instead. This will repoduce SE identical to sm.get_margeff()
+rustmfx.mfx(logit_result, se_method='sm')
+```
+Output:
+```
+|              |        dy/dx |    Std. Err |            z |   Pr(>|z|) |   Conf. Int. Low |   Conf. Int. Hi | Significance   |
+|:-------------|-------------:|------------:|-------------:|-----------:|-----------------:|----------------:|:---------------|
+| continuous_1 | -0.000727353 | 0.000429072 |   -1.69518   |  0.0900422 |     -0.00156833  |     0.000113629 | *              |
+| continuous_2 |  0.000160417 | 0.000429249 |    0.373717  |  0.708615  |     -0.00068091  |     0.00100174  |                |
+| continuous_3 |  0.133292    | 0.000259576 |  513.501     |  0         |      0.132784    |     0.133801    | ***            |
+| continuous_4 |  0.000194787 | 0.000429317 |    0.453715  |  0.650034  |     -0.000646674 |     0.00103625  |                |
+| dummy_1      | -0.152622    | 0.00085115  | -179.313     |  0         |     -0.15429     |    -0.150954    | ***            |
+| dummy_2      |  0.355251    | 0.000852706 |  416.616     |  0         |      0.35358     |     0.356923    | ***            |
+| dummy_3      | -8.12991e-05 | 0.000857946 |   -0.0947601 |  0.924505  |     -0.00176287  |     0.00160027  |                |
+| dummy_4      |  0.194628    | 0.000837786 |  232.313     |  0         |      0.192986    |     0.19627     | ***            |
+```
+
+## Accounting for Robust SE, Clustered SE, and Weights
+
+One of the key advantages of RustMFX is that it automatically uses the model’s covariance matrix—obtained via the ````cov_params()```` method from the ```statsmodels``` fit object—in the delta method to compute the standard errors of the marginal effects.
+
+**What does this mean for you?**  
+If you fit your model with additional parameters such as robust standard errors, clustered standard errors, or observation weights (for example, by using options like ```cov_type='HC0'```, ```cov_kwds={'groups': clusters}```, or specifying weights), these adjustments will be captured in the covariance matrix output of your ```sm.{Model}(y, X).fit()``` call.
+
+For instance, if you fit a Probit model with robust standard errors:
+
+```python
+results = sm.Probit(y, X).fit(cov_type='HC0')
+```
+Then call
+```python
+mfx_results = rustmfx.mfx(results)
+```
+RustMFX will automatically extract and use the robust covariance matrix in the marginal effects calculations. In other words, as long as these parameters (robust SE, clustered SE, weights, etc.) are specified in your ``statsmodels``` ```.fit()```, the ```.mfx()``` function will automatically account for them.
+
+This integration ensures that your marginal effects and their standard errors reflect any adjustments made during model fitting, providing you with accurate and reliable inference.
+
+
+## Performance Comparison between rustmfx.mfx() and statsmodels.get_margeff()
+Below are some graphs showuing the digfference in peak memory usage of ```.mfx()``` and ```.get_margeff().summary_frame()``` across datasets of differing number of observations $N$ and degrees of freedom (number of parameters) $k$
+
 
 ## Contributing
 
-Contributions are welcome! Feel free to submit issues and pull requests on [GitHub](https://github.com/luke-brosnan-cbc/FeBOLT).
+Contributions are welcome! Feel free to submit issues and pull requests on [GitHub](https://github.com/luke-brosnan-cbc/RustMFX).
 
 ## License
 
