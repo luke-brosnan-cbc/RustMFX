@@ -3,7 +3,7 @@ requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "febolt"
+name = "rustmfx"
 version = "0.1.60"
 requires-python = ">=3.8"
 description = "A Rust-based Statistics and ML package, callable from Python."
