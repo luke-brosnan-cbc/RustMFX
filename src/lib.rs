@@ -122,7 +122,7 @@ fn pdf_deriv_logit_probit(is_logit: bool, z: f64) -> f64 {
 /// The function accepts a model (Logit or Probit), an optional chunk size (to process data in parts),
 /// and an optional `se_method` string which defaults to "rust".
 #[pyfunction]
-fn ame<'py>(
+fn mfx<'py>(
     py: Python<'py>,
     model: &'py PyAny,              // This could be either a Logit or Probit model from statsmodels.
     chunk_size: Option<usize>,      // Optional: process the data in chunks to save on memory.
@@ -394,7 +394,7 @@ fn ame<'py>(
 #[pymodule]
 fn febolt(_py: Python, m: &PyModule) -> PyResult<()> {
     // Register our AME function so it can be called from Python.
-    m.add_function(wrap_pyfunction!(ame, m)?)?;
+    m.add_function(wrap_pyfunction!(mfx, m)?)?;
     Ok(())
 }
 
