@@ -1,6 +1,6 @@
 [package]
 name = "rustmfx"
-version = "0.1.60"
+version = "0.1.1"
 edition = "2021"
 description = "Statistics library for Python powered by Rust"
 license = "MIT"
