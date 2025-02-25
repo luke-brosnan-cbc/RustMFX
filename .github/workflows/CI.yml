@@ -1,3 +1,6 @@
+OK, so do this for each system, like you do already for 3.12, also do for 3.13
+
+
 name: Python
 on:
   push:
@@ -111,10 +114,12 @@ jobs:
             ${{ env.pythonLocation }}\Lib\site-packages
           key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/Cargo.toml') }}
 
+
       - name: Install Intel oneAPI Math Kernel Library (oneMKL)
         shell: pwsh
         run: |
           Write-Output "Starting Intel oneAPI BaseKit installation..."
+      
           # Construct the installer URL using MKL_VERSION
           $MKL_VERSION = "${{ env.MKL_VERSION }}"
           $URL = "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/ae29263e-38b9-4d43-86c3-376d6e0668e7/intel-oneapi-base-toolkit-${MKL_VERSION}_offline.exe"
@@ -123,6 +128,7 @@ jobs:
           $EXTRACTED_PATH = "$env:TEMP\webimage_extracted"
           $EXTRACT_LOG = "$env:TEMP\extract.log"
           $INSTALL_LOG_DIR = "$env:TEMP\mkl_install_logs"
+      
           Write-Output "Downloading Intel oneAPI BaseKit installer from $URL..."
           try {
             Invoke-WebRequest -Uri $URL -OutFile $INSTALLER_PATH -UseBasicParsing -ErrorAction Stop
@@ -131,6 +137,7 @@ jobs:
             Write-Error "Failed to download the MKL installer: $_"
             exit 1
           }
+      
           Write-Output "Extracting the installer..."
           try {
             Start-Process -FilePath $INSTALLER_PATH -ArgumentList "-s", "-x", "-f", $EXTRACTED_PATH, "--log", $EXTRACT_LOG -Wait -NoNewWindow
@@ -144,7 +151,9 @@ jobs:
             }
             exit 1
           }
+      
           Remove-Item $INSTALLER_PATH -Force
+      
           Write-Output "Running the MKL bootstrapper..."
           try {
             Start-Process -FilePath "$EXTRACTED_PATH\bootstrapper.exe" -ArgumentList "-s", "--action", "install", "--components=$COMPONENTS", "--eula=accept", "-p=NEED_VS2017_INTEGRATION=0", "-p=NEED_VS2019_INTEGRATION=0", "-p=NEED_VS2022_INTEGRATION=0", "--log-dir=$INSTALL_LOG_DIR" -Wait -NoNewWindow
@@ -162,7 +171,9 @@ jobs:
             }
             exit 1
           }
+      
           Remove-Item -Recurse -Force $EXTRACTED_PATH
+      
           Write-Output "MKL installed successfully."
 
       - name: List oneAPI Installation Directory
@@ -182,10 +193,12 @@ jobs:
         run: |
           $mkl_base_path = "C:\Program Files (x86)\Intel\oneAPI\mkl"
           if (Test-Path $mkl_base_path) {
+            # Get the latest MKL version directory
             $latest_mkl = Get-ChildItem -Path $mkl_base_path -Directory | Sort-Object Name -Descending | Select-Object -First 1
             if ($latest_mkl) {
               $mkl_lib_path = "$($latest_mkl.FullName)\lib"
               Write-Output "MKL lib path found: $mkl_lib_path"
+              # Set the output using environment file
               echo "mkl_lib_path=$mkl_lib_path" >> $env:GITHUB_OUTPUT
             } else {
               Write-Error "No MKL versions found in $mkl_base_path"
@@ -241,12 +254,16 @@ jobs:
         run: |
           $mkl_lib_path = "${{ env.MKL_LIB_PATH }}"
           $mkl_bin_path = $mkl_lib_path.Replace('\lib', '\bin\intel64')
+          
           $env:MKL_INTERFACE_LAYER = "LP64"
           $env:MKL_THREADING_LAYER = "SEQ"
           $env:PATH += ";$mkl_bin_path"
+          
           Write-Output "MKL_INTERFACE_LAYER set to LP64"
           Write-Output "MKL_THREADING_LAYER set to SEQ"
           Write-Output "Updated PATH to include: $mkl_bin_path"
+          
+          # Export variables for subsequent steps
           echo "MKL_INTERFACE_LAYER=$env:MKL_INTERFACE_LAYER" >> $env:GITHUB_ENV
           echo "MKL_THREADING_LAYER=$env:MKL_THREADING_LAYER" >> $env:GITHUB_ENV
           echo "PATH=$env:PATH" >> $env:GITHUB_ENV
@@ -282,7 +299,6 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.python-version }}
           path: dist
-
   macos:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
@@ -328,11 +344,13 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Disable Homebrew auto-update
           export HOMEBREW_NO_AUTO_UPDATE=1
           brew install openssl openblas
           echo "OPENSSL_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
           echo "OPENSSL_LIB_DIR=$(brew --prefix openssl)/lib" >> $GITHUB_ENV
           echo "OPENSSL_INCLUDE_DIR=$(brew --prefix openssl)/include" >> $GITHUB_ENV
+
           python -m pip install --upgrade pip setuptools wheel
           if [[ "${{ matrix.python-version }}" == "3.12" || "${{ matrix.python-version }}" == "3.13" ]]; then
             pip install numpy==1.26.4
@@ -344,7 +362,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --features openblas
+          args: --release --out dist --features openblas  # Explicitly enable openblas
           sccache: 'true'
 
       - name: Upload wheels
@@ -362,6 +380,7 @@ jobs:
         with:
           command: sdist
           args: --out dist
+
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
@@ -375,6 +394,7 @@ jobs:
     needs: [linux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
+
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:
