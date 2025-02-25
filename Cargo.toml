@@ -38,4 +38,3 @@ ndarray-linalg = { version = "0.16", default-features = false, features = ["open
 [target.'cfg(windows)'.dependencies]
 intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-seq"] }
 ndarray-linalg = { version = "0.16", default-features = false, features = ["intel-mkl-static"] }
-
