@@ -1,8 +1,7 @@
 # RustMFX
 
-[![Build Status](https://github.com/luke-brosnan-cbc/RustMFX/workflows/CI.yml/badge.svg)](https://github.com/luke-brosnan-cbc/RustMFX/actions)
+[![Build Status](https://github.com/luke-brosnan-cbc/RustMFX/actions/workflows/CI.yml/badge.svg)](https://github.com/luke-brosnan-cbc/RustMFX/actions/workflows/CI.yml)
 [![PyPI version](https://badge.fury.io/py/rustmfx.svg)](https://pypi.org/project/rustmfx/)
-
 ## Introduction
 
 **RustMFX** is a high-performance Rust package for computing marginal effects (MEs) in binary choice models (Logit and Probit). 
