@@ -69,9 +69,9 @@ jobs:
           args: --release --out dist --features openblas --interpreter python${{ matrix.python-version }} # This now uses openblas-static from Cargo.toml
           sccache: 'true'
           manylinux: auto
-          docker-options: -e OPENSSL_NO_VENDOR=1
           before-script-linux: |
             yum install -y epel-release
+            yum install -y openblas-devel lapack-devel gcc-gfortran pkgconfig
             yum install -y openssl-devel perl-IPC-Cmd perl-Test-Simple perl-App-cpanminus
             # Do not install openblas-devel because we want openblas-src to build OpenBLAS
             cpanm --notest Term::Table
