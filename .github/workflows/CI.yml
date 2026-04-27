@@ -67,7 +67,6 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --features openblas --interpreter python${{ matrix.python-version }} # This now uses openblas-static from Cargo.toml
-          python: python${{ matrix.python-version }}
           sccache: 'true'
           manylinux: auto
           docker-options: -e OPENSSL_NO_VENDOR=1
