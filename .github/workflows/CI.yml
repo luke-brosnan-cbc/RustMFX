@@ -72,9 +72,20 @@ jobs:
           before-script-linux: |
             yum install -y epel-release
             yum install -y openblas-devel lapack-devel gcc-gfortran pkgconfig
-            yum install -y openssl-devel perl-IPC-Cmd perl-Test-Simple perl-App-cpanminus
-            # Do not install openblas-devel because we want openblas-src to build OpenBLAS
+            yum install -y perl-IPC-Cmd perl-Test-Simple perl-App-cpanminus
             cpanm --notest Term::Table
+
+            # Install OpenSSL 1.1.1 from source (manylinux has OpenSSL 1.0.x which is too old)
+            curl -sSL https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz -o /tmp/openssl.tar.gz
+            cd /tmp && tar xzf openssl.tar.gz && cd openssl-1.1.1w
+            ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl no-shared
+            make -j$(nproc) && make install_sw
+            cd /
+
+            export OPENSSL_DIR=/usr/local/openssl
+            export OPENSSL_LIB_DIR=/usr/local/openssl/lib
+            export OPENSSL_INCLUDE_DIR=/usr/local/openssl/include
+            export OPENSSL_STATIC=1
             export OPENBLAS_NO_AVX2=1
 
       - name: Upload wheels
