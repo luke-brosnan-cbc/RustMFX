@@ -19,12 +19,11 @@ openblas = ["blas", "ndarray-linalg/openblas-static"]
 blas = ["ndarray/blas"]
 
 
+
 [dependencies]
 pyo3 = { version = "0.18", features = ["extension-module"] }
 numpy = "0.18"
-ndarray = { version = "0.15", default-features = false, features = ["std", "blas"] } 
-openssl = { version = "0.10", features = ["vendored"] }
-openssl-sys = "0.9"
+ndarray = { version = "0.15", default-features = false, features = ["std", "blas"] }
 statrs = "0.16"
 blas = "0.22.0"
 thiserror = "1.0"
