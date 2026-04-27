@@ -15,8 +15,9 @@ crate-type = ["cdylib"]
 [features]
 default = []
 intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
-openblas = ["blas", "ndarray-linalg/openblas-static"]
+openblas = ["blas", "ndarray-linalg/openblas-system"]
 blas = ["ndarray/blas"]
+
 
 
 
@@ -30,8 +31,8 @@ thiserror = "1.0"
 
 # Linux/macOS specific dependencies
 [target.'cfg(not(windows))'.dependencies]
-openblas-src = { version = "0.10", features = ["static"] }
-ndarray-linalg = { version = "0.16", default-features = false, features = ["openblas-static"] }
+openblas-src = { version = "0.10", features = ["system"] }
+ndarray-linalg = { version = "0.16", default-features = false, features = ["openblas-system"] }
 
 # Windows specific dependencies
 [target.'cfg(windows)'.dependencies]
