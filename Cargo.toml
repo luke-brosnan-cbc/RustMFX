@@ -1,6 +1,6 @@
 [package]
 name = "rustmfx"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 description = "Statistics library for Python powered by Rust"
 license = "MIT"
@@ -37,4 +37,4 @@ ndarray-linalg = { version = "0.16", default-features = false, features = ["open
 # Windows specific dependencies
 [target.'cfg(windows)'.dependencies]
 intel-mkl-src = { version = "0.8.1", features = ["mkl-static-lp64-seq"] }
-ndarray-linalg = { version = "0.16", default-features = false, features = ["intel-mkl-static"] }
+ndarray-linalg = { version = "0.16", default-features = false, features = ["intel-mkl-static"] }-features = false, features = ["intel-mkl-static"] }
