@@ -21,21 +21,36 @@ pip install rustmfx
 
 ---
 
-## Standard Error Methods
+## Matching statsmodels
 
-RustMFX offers two Jacobian formulations for the delta method variance $\text{Var}(\text{AME}) = J \cdot \text{Var}(\hat{\beta}) \cdot J^T$:
+`rustmfx.mfx(model)` reproduces `statsmodels.get_margeff()` **exactly** — identical AMEs and standard errors to floating-point precision (typically within ~1e-15), for both Logit and Probit.
 
-**`se_method='rust'` (default)**
+The only knob is `dummy`, which maps directly onto statsmodels' own flag:
 
-$$J_{\text{rust}} = \frac{1}{N} \sum_{i=1}^{N} \frac{\partial \left( \beta_j f(X_i \beta) \right)}{\partial \beta}$$
+| RustMFX call | Equivalent statsmodels call |
+|---|---|
+| `mfx(model)` | `model.get_margeff()` |
+| `mfx(model, dummy=True)` | `model.get_margeff(dummy=True)` |
 
-The Jacobian is computed at the observation level and then averaged. This preserves individual-level variability in the gradient and is closer to how Stata computes marginal effect standard errors.
+With `dummy=False` (the default) every non-constant regressor — including columns that happen to be 0/1 — is treated as continuous, exactly as statsmodels does by default. Set `dummy=True` to treat strictly-binary columns as discrete, using the finite-difference effect $F(\cdot\mid x{=}1) - F(\cdot\mid x{=}0)$.
 
-**`se_method='sm'`**
+---
 
-$$J_{\text{sm}} = \frac{1}{N} \sum_{i=1}^{N} X_i \, f(X_i \beta)$$
+## Standard Errors
 
-The derivative of the predicted probability with respect to $\beta$ is averaged over all observations. This smooths out individual-level variation and produces standard errors identical to `statsmodels.get_margeff()`. Useful for replication or when more stable SEs in small samples are preferred.
+Standard errors are computed by the delta method,
+
+$$\text{Var}(\text{AME}) = J \cdot \text{Var}(\hat{\beta}) \cdot J^{T},$$
+
+where $J$ is the exact analytic Jacobian of the average marginal effect with respect to $\beta$:
+
+$$J_{jl} = \frac{\partial\, \text{AME}_j}{\partial \beta_l} = \delta_{jl}\,\frac{1}{N}\sum_{i=1}^{N} f(X_i\beta) \;+\; \beta_j\,\frac{1}{N}\sum_{i=1}^{N} f'(X_i\beta)\,x_{il}$$
+
+for continuous variables (with $f'$ the derivative of the density: $f'(z)=f(z)(1-2F(z))$ for logit, $f'(z)=-z\,\phi(z)$ for probit). For discrete variables under `dummy=True`, $J$ is the difference of the predicted-probability gradients evaluated at $x=1$ and $x=0$.
+
+This is the same Jacobian statsmodels obtains by numerical differentiation, which is why the standard errors are identical.
+
+> **Note (v0.2.0):** earlier versions exposed a second `se_method='rust'` option that used a different, incorrect off-diagonal Jacobian term and did not match statsmodels (or Stata). It has been removed — there is now a single, correct method and no `se_method` argument.
 
 ---
 
@@ -61,11 +76,11 @@ $$\text{AME}_j = \frac{1}{N} \sum_{i=1}^{N} \beta_j \cdot f(X_i \beta)$$
 
 For **continuous** variables, the marginal effect is the derivative above.
 
-For **discrete** (binary) variables, a finite-difference approach is used instead:
+For **discrete** (binary) variables, a finite-difference approach is used instead — but **only when `dummy=True`**:
 
 $$\Delta P = P(Y=1 \mid X_{ij}=1) - P(Y=1 \mid X_{ij}=0)$$
 
-This is consistent with how `statsmodels.get_margeff()` handles binary variables.
+This matches `statsmodels.get_margeff(dummy=True)`. With the default `dummy=False`, binary columns are treated as continuous, exactly as statsmodels does by default.
 
 ---
 
@@ -107,7 +122,7 @@ results_logit = sm.Logit(y, X).fit(disp=0)
 
 > **Note:** `y` and `X` passed to `sm.{Model}(y, X).fit()` must be `pandas.DataFrame` objects, and column names must be strings. This ensures the fit object output is a DataFrame, which is required by `rustmfx.mfx()`.
 
-### Probit — default SE method
+### Probit — default (`get_margeff()` equivalent)
 
 ```python
 rustmfx.mfx(results_probit)
@@ -117,39 +132,53 @@ Output:
 ```
 |              |        dy/dx |    Std. Err |           z |   Pr(>|z|) |   Conf. Int. Low |   Conf. Int. Hi | Significance   |
 |:-------------|-------------:|------------:|------------:|-----------:|-----------------:|----------------:|:---------------|
-| continuous_1 | -0.000711967 | 0.000429515 |   -1.65761  |  0.0973968 |     -0.00155382  |     0.000129882 | *              |
-| continuous_2 |  0.000143285 | 0.000429703 |    0.333452 |  0.738793  |     -0.000698933 |     0.000985503 |                |
-| continuous_3 |  0.132766    | 0.000325385 |  408.028    |  0         |      0.132128    |     0.133404    | ***            |
-| continuous_4 |  0.000172238 | 0.000429776 |    0.400763 |  0.688595  |     -0.000670123 |     0.0010146   |                |
-| dummy_1      | -0.144887    | 0.000853498 | -169.757    |  0         |     -0.14656     |    -0.143214    | ***            |
-| dummy_2      |  0.355616    | 0.000853642 |  416.586    |  0         |      0.353943    |     0.357289    | ***            |
-| dummy_3      | -0.000114508 | 0.000858866 |   -0.133325 |  0.893936  |     -0.00179789  |     0.00156887  |                |
-| dummy_4      |  0.193636    | 0.000841226 |  230.183    |  0         |      0.191987    |     0.195285    | ***            |
+| continuous_1 |  5.73956e-05 | 0.000431725 |    0.132945 |   0.894237 |     -0.000788785 |     0.000903577 |                |
+| continuous_2 |  0.000241658 | 0.000432161 |    0.559185 |   0.576035 |     -0.000605377 |      0.00108869 |                |
+| continuous_3 |    0.0349411 | 0.000302463 |     115.522 |          0 |        0.0343483 |       0.0355339 | ***            |
+| continuous_4 |   -0.0317055 |  0.00033468 |    -94.7337 |          0 |       -0.0323614 |      -0.0310495 | ***            |
+| dummy_1      |     0.217042 | 0.000857476 |     253.118 |          0 |         0.215362 |        0.218723 | ***            |
+| dummy_2      |     0.283884 | 0.000900227 |     315.347 |          0 |         0.282119 |        0.285648 | ***            |
+| dummy_3      |    -0.271684 | 0.000995668 |    -272.866 |          0 |        -0.273636 |       -0.269733 | ***            |
+| dummy_4      | -0.000337121 | 0.000864605 |   -0.389913 |   0.696601 |      -0.00203175 |      0.00135751 |                |
 ```
+
+Here `dummy=False` (the default), so the binary columns are treated as continuous — exactly as `results_probit.get_margeff()` does.
 
 Significance: `*` p<0.1, `**` p<0.05, `***` p<0.01
 
-### Logit — statsmodels-style SE
+### Logit — discrete dummies (`get_margeff(dummy=True)` equivalent)
 
 ```python
-rustmfx.mfx(results_logit, se_method='sm')
+rustmfx.mfx(results_logit, dummy=True)
 ```
 
 Output:
 ```
-|              |        dy/dx |    Std. Err |            z |   Pr(>|z|) |   Conf. Int. Low |   Conf. Int. Hi | Significance   |
-|:-------------|-------------:|------------:|-------------:|-----------:|-----------------:|----------------:|:---------------|
-| continuous_1 | -0.000727353 | 0.000429072 |   -1.69518   |  0.0900422 |     -0.00156833  |     0.000113629 | *              |
-| continuous_2 |  0.000160417 | 0.000429249 |    0.373717  |  0.708615  |     -0.00068091  |     0.00100174  |                |
-| continuous_3 |  0.133292    | 0.000259576 |  513.501     |  0         |      0.132784    |     0.133801    | ***            |
-| continuous_4 |  0.000194787 | 0.000429317 |    0.453715  |  0.650034  |     -0.000646674 |     0.00103625  |                |
-| dummy_1      | -0.152622    | 0.00085115  | -179.313     |  0         |     -0.15429     |    -0.150954    | ***            |
-| dummy_2      |  0.355251    | 0.000852706 |  416.616     |  0         |      0.35358     |     0.356923    | ***            |
-| dummy_3      | -8.12991e-05 | 0.000857946 |   -0.0947601 |  0.924505  |     -0.00176287  |     0.00160027  |                |
-| dummy_4      |  0.194628    | 0.000837786 |  232.313     |  0         |      0.192986    |     0.19627     | ***            |
+|              |        dy/dx |    Std. Err |           z |   Pr(>|z|) |   Conf. Int. Low |   Conf. Int. Hi | Significance   |
+|:-------------|-------------:|------------:|------------:|-----------:|-----------------:|----------------:|:---------------|
+| continuous_1 |  2.66309e-05 |  0.00043231 |   0.0616014 |    0.95088 |     -0.000820696 |     0.000873958 |                |
+| continuous_2 |  0.000259106 | 0.000432796 |    0.598679 |   0.549387 |     -0.000589175 |      0.00110739 |                |
+| continuous_3 |    0.0351363 | 0.000298504 |     117.708 |          0 |        0.0345512 |       0.0357213 | ***            |
+| continuous_4 |   -0.0331457 | 0.000340525 |    -97.3373 |          0 |       -0.0338132 |      -0.0324783 | ***            |
+| dummy_1      |     0.228592 | 0.000976438 |     234.108 |          0 |         0.226678 |        0.230506 | ***            |
+| dummy_2      |     0.290481 |  0.00095629 |     303.758 |          0 |         0.288607 |        0.292356 | ***            |
+| dummy_3      |    -0.275727 |  0.00102521 |    -268.946 |          0 |        -0.277736 |       -0.273717 | ***            |
+| dummy_4      | -0.000336179 | 0.000866042 |   -0.388178 |   0.697884 |      -0.00203362 |      0.00136126 |                |
 ```
 
+With `dummy=True`, each binary column's effect is the finite difference $F(\cdot\mid x{=}1)-F(\cdot\mid x{=}0)$, matching `results_logit.get_margeff(dummy=True)`.
+
 The model type (Logit or Probit) is detected automatically from `model.__class__.__name__`.
+
+### Parameters
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `model` | statsmodels Logit/Probit result | — | A fitted results object. `params`, `cov_params()`, and `exog` are read from it. |
+| `dummy` | `bool` | `False` | If `True`, strictly-0/1 columns are treated as discrete (finite-difference effect), matching `get_margeff(dummy=True)`. If `False`, all non-constant columns are treated as continuous, matching `get_margeff()`. |
+| `chunk_size` | `int` | `None` | Process observations in chunks of this size to bound peak memory on very large $N$. Does not change the result. |
+
+Constant/intercept columns (named `const` or `Intercept`, case-insensitive) are detected automatically and dropped from the output, mirroring statsmodels.
 
 ---
 
@@ -179,5 +208,3 @@ Issues and pull requests welcome on [GitHub](https://github.com/luke-brosnan-cbc
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-
