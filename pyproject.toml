@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rustmfx"
-version = "0.1.4"
+version = "0.2.0"
 requires-python = ">=3.8"
 description = "A Rust-based Statistics and ML package, callable from Python."
 keywords = ["rust", "python", "Machine Learning", "Statistics", "pyo3"]
@@ -23,4 +23,4 @@ dependencies = [
 ]
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["pyo3/extension-module"]"]
